@@ -1,0 +1,62 @@
+import urllib.parse
+import urllib.request as ur
+import bs4
+from bs4 import Tag, NavigableString, BeautifulSoup
+import pandas as pd
+scientists =['Albert Einstein', 'Richard Feynman']
+
+df_all = pd.DataFrame()
+df ={}
+for scientist in scientists:
+  # query arxiv
+  query = urllib.parse.quote(scientist)
+  url = 'http://export.arxiv.org/api/query?search_query=all:' + query + '&max_results=30'
+  s = ur.urlopen(url)
+  sl = s.read()
+  soup = bs4.BeautifulSoup(sl, 'html5lib')
+  tags = soup.find_all_next(['id','published', 'title','summary','name'])
+  #remove first id and title which are from the query, not from a paper.
+  tags = tags[2:] 
+
+  # parse tags into lists.
+  link = []
+  published = []
+  title = []
+  summary = []
+  name= []
+  author = [] #This will be a list of lists in case of multiple authors.
+
+  for tag in tags:
+    if tag.name == 'id':
+      link.append(tag.string)
+      if name: #check list is not empty
+        author.append(name)
+        name = []
+    if tag.name == 'name':
+        name.append(tag.string)
+    for x in tag.next_siblings:
+      if x.name == 'summary':
+        if isinstance(x, Tag):
+          summary.append(x.string)
+        break
+      elif x.name == 'title':
+        if isinstance(x, Tag):
+          title.append(x.string)
+        break
+      elif x.name == 'published':
+        if isinstance(x, Tag):
+          published.append(x.string)
+        break
+  author.append(name) #append final author list
+  # add lists to dictionary
+  dict = {'Scientist': scientist, 'Title': title, 'Published': published, 'Summary': summary,'Link':link, 'Authors': author} 
+  # convert to dataframe    
+  df[scientist] = pd.DataFrame(dict)
+
+pdList = []
+for scientist in scientists:
+  pdList.append(df[scientist])
+combined_df = pd.concat(pdList)
+
+print(combined_df['Link'].value_counts())
+print(combined_df['Title'].value_counts())
